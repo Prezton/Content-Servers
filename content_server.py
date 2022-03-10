@@ -1,6 +1,6 @@
 import threading
 import socket, sys
-
+import argparse
 # socket.gethostname --> host name
 # socket.gethostbyname --> host ip
 
@@ -14,8 +14,11 @@ DEFAULT_PORT = 18346
 port = DEFAULT_PORT
 BUFSIZE = 1024
 
-# uuid: distance map
+# uuid: distance map, store all reachable nodes
 uuid_distance_map = dict()
+
+# uuid: Node map, store all known nodes information
+uuid_node_map = dict()
 
 
 def parse_conf(path):
@@ -66,12 +69,12 @@ def client_handle(srv, msg, client_addr):
     # conn.close()
 
 def add_neighbors(cmd_line):
+    # print(cmd_line)
     args = cmd_line.split(" ")[1:]
     count_line = 0
     for line in args:
         count_line += 1
         split_result = line.split("=")
-        print(split_result)
         if split_result[0] == "uuid":
             uuid = split_result[1].strip()
         elif split_result[0] == "host":
@@ -80,7 +83,7 @@ def add_neighbors(cmd_line):
             backend_port = int(split_result[1].strip())
         elif split_result[0] == "metric":
             metric = int(split_result[1].strip())
-    print(uuid, host_name, backend_port, metric)
+    # print(uuid, host_name, backend_port, metric)
     uuid_distance_map[uuid] = metric
 
 def print_active_neighbors():
@@ -104,15 +107,21 @@ def init_uuid_distance_map(peer_count, peer_nodes):
         port = int(line[2].strip())
         distance = int(line[3].strip())
         uuid_distance_map[uuid] = distance
+
         
+def kill_current_node():
+    sys.exit(0)
 
 #addneighbor uuid=686f60-1939-4d62-860c-4c703d7a67a6 host=ece006.ece.local.cmu.edu backend_port=18346 metric=30
 
 if __name__ == "__main__":
-    if (sys.argv[1] == "-c"):
-        conf_path = sys.argv[2]
-    print("configure file: " + conf_path)
-    parsed_result = parse_conf(conf_path)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-c", required=True, type=str)
+    args = parser.parse_args()
+    
+    # if (sys.argv[1] == "-c"):
+    #     conf_path = sys.argv[2]
+    parsed_result = parse_conf(args.c)
     uuid = parsed_result[0]
     name = parsed_result[1]
     backend_port = int(parsed_result[2])
@@ -120,32 +129,33 @@ if __name__ == "__main__":
         peer_count = int(parsed_result[3])
         peer_nodes = parsed_result[4]
         init_uuid_distance_map(peer_count, peer_nodes)
-
-    print("parsed successfully", uuid, name, backend_port)
     # Initialize neighbor nodes according to configure file
-
     # Create socket instance
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     
+    localip = socket.gethostbyname(socket.gethostname())
     # bind socket
     try:
-        s.bind((name, backend_port))
+        s.bind((localip, backend_port))
     except socket.error as e:
-        print('Error when binding.\n\t'+str(e))
         sys.exit(-1)
-
 
 
     # main loop
     while True:
-        cmd_line = input("Server: ")
-        if cmd_line == "uuid":
+        # msg_addr = s.recvfrom(BUFSIZE)
+        # client_msg = (msg_addr[0]).decode()
+        # client_addr = msg_addr[1]
+        command_line_msg = input()
+        if command_line_msg == "uuid":
             print_uuid(uuid)
-        elif cmd_line == "neighbors":
+        elif command_line_msg == "neighbors":
             pass
-        elif cmd_line.split(" ")[0] == "addneighbor":
-            add_neighbors(cmd_line)
+        elif command_line_msg.split(" ")[0] == "addneighbor":
+            add_neighbors(command_line_msg)
+        elif command_line_msg == "kill":
+            kill_current_node()
 
 
 
