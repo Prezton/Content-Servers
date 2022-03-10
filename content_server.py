@@ -1,6 +1,7 @@
 import threading
 import socket, sys
 import argparse
+from Node import Node
 # socket.gethostname --> host name
 # socket.gethostbyname --> host ip
 
@@ -14,11 +15,16 @@ DEFAULT_PORT = 18346
 port = DEFAULT_PORT
 BUFSIZE = 1024
 
-# uuid: distance map, store all reachable nodes
+# uuid: distance map
 uuid_distance_map = dict()
 
-# uuid: Node map, store all known nodes information
+# uuid: Node map, store all neighbor nodes
 uuid_node_map = dict()
+
+# uuid: heartbeat count map, store the latest heartbeat sequence number
+# Q: how to decide sequence number? many global variables needed?
+uuid_heartbeatcount_map = dict()
+
 
 
 def parse_conf(path):
@@ -85,9 +91,28 @@ def add_neighbors(cmd_line):
             metric = int(split_result[1].strip())
     # print(uuid, host_name, backend_port, metric)
     uuid_distance_map[uuid] = metric
+    uuid_node_map[uuid] = Node(uuid = uuid, host_name = host_name, backend_port = backend_port, metric = metric)
 
 def print_active_neighbors():
-    pass
+    result = dict()
+    tmp_outer_dict = dict()
+    for uuid in uuid_node_map:
+        tmp_dict = dict()
+        tmp_node = uuid_node_map[uuid]
+        tmp_name = tmp_node.name
+        tmp_hostname = tmp_node.host_name
+        tmp_backendport = tmp_node.backend_port
+        tmp_metric = uuid_distance_map[uuid]
+        tmp_dict["uuid"] = uuid
+        tmp_dict["host"] = tmp_hostname
+        tmp_dict["backend_port"] = tmp_backendport
+        tmp_dict["metric"] = tmp_metric
+        tmp_outer_dict[tmp_name] = tmp_dict
+    result["neighbors"] = tmp_outer_dict
+    print(result)
+
+
+        
 
 def send_keepalive():
     pass
@@ -151,7 +176,7 @@ if __name__ == "__main__":
         if command_line_msg == "uuid":
             print_uuid(uuid)
         elif command_line_msg == "neighbors":
-            pass
+            print_active_neighbors()
         elif command_line_msg.split(" ")[0] == "addneighbor":
             add_neighbors(command_line_msg)
         elif command_line_msg == "kill":

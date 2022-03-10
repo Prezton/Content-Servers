@@ -1,7 +1,10 @@
 class Node:
-    def __init__(self, uuid, name, port, peer_count = 0, peer_nodes = None):
+    def __init__(self, uuid, host_name, backend_port, metric):
         self.uuid = uuid
-        self.host_name = name
-        self.port = port
-        self.peer_count = peer_count
-        self.peer_nodes = peer_nodes
+        self.host_name = host_name
+        self.backend_port = backend_port
+        self.metric = metric
+        self.name = None
+
+    def set_name(name):
+        self.name = name
