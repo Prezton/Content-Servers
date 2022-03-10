@@ -111,15 +111,18 @@ def init_uuid_distance_map(peer_count, peer_nodes):
 if __name__ == "__main__":
     if (sys.argv[1] == "-c"):
         conf_path = sys.argv[2]
+    print("configure file: " + conf_path)
     parsed_result = parse_conf(conf_path)
     uuid = parsed_result[0]
     name = parsed_result[1]
     backend_port = int(parsed_result[2])
-    peer_count = int(parsed_result[3])
-    peer_nodes = parsed_result[4]
+    if len(parsed_result) > 3:
+        peer_count = int(parsed_result[3])
+        peer_nodes = parsed_result[4]
+        init_uuid_distance_map(peer_count, peer_nodes)
 
+    print("parsed successfully", uuid, name, backend_port)
     # Initialize neighbor nodes according to configure file
-    init_uuid_distance_map(peer_count, peer_nodes)
 
     # Create socket instance
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
