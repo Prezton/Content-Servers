@@ -112,8 +112,6 @@ def print_active_neighbors():
     print(result)
 
 
-        
-
 def send_keepalive():
     pass
 
@@ -133,6 +131,15 @@ def init_uuid_distance_map(peer_count, peer_nodes):
         distance = int(line[3].strip())
         uuid_distance_map[uuid] = distance
 
+
+def advertisement():
+    pass
+
+def send_linkstate():
+    pass
+
+def forward_linkstate(msg):
+    pass
         
 def kill_current_node():
     sys.exit(0)
@@ -181,6 +188,10 @@ if __name__ == "__main__":
             add_neighbors(command_line_msg)
         elif command_line_msg == "kill":
             kill_current_node()
+        elif command_line_msg == "map":
+            pass
+        elif command_line_msg == "rank":
+            pass
 
 
 
