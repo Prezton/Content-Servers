@@ -2,10 +2,11 @@ import socket, sys
 
 BUFSIZE = 1024
 PORT = 18346
-SERVER = "127.0.0.1"
-ADDR = (SERVER, PORT)
+SERVER = socket.gethostbyname("ece007.ece.local.cmu.edu")
+# SERVER = "127.0.0.1"
+ADDR = (str(SERVER), PORT)
 client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-
+print(ADDR)
 
 while True:
     msg = input("Client input: ")
@@ -13,4 +14,4 @@ while True:
     if (msg == "DISCONNECT"):
         print("BREAK")
         break
-    print("Server: ", client.recvfrom(BUFSIZE))
+    print("Server: ", client.recvfrom(BUFSIZE)[1])
