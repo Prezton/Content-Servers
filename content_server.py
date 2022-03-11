@@ -141,6 +141,7 @@ def print_active_neighbors():
         tmp_outer_dict[tmp_name] = tmp_dict
     result["neighbors"] = tmp_outer_dict
     print(result)
+    print(len(uuid_node_map))
 
 # @brief Handle keepalive signal from received msg, if it is a new neighbor, add it to map
 # @param msg message sent from other content_server which may contain Alive_uuid_timestamps_hostname_backendport_metric
@@ -178,17 +179,17 @@ def send_keepalive(srv):
     cur_timestamp = datetime.timestamp(datetime.now())
     # print("send keepalive: " + str(cur_timestamp))
     deleted = set()
+    lock.acquire()
     for uuid in uuid_node_map:
         tmp_node = uuid_node_map[uuid]
         if (cur_timestamp - tmp_node.timestamp > 15):
+            # Avoid dict change during iteration
             deleted.add(uuid)
-            print("Y")
     
     for uuid in deleted:
         del uuid_node_map[uuid]
         del uuid_distance_map[uuid]
-        print("deleted: " + uuid)
-    print("DELE: ", deleted)
+        # print("deleted: " + uuid)
 
     msg = "Alive"
     # Send to each neighbor node
@@ -202,7 +203,8 @@ def send_keepalive(srv):
         msg += "_" + self_uuid + "_" + str(timestamp) + "_" + self_hostname + "_" + str(self_backendport) + "_" + str(uuid_distance_map[uuid])
         ADDR = (tmp_addr, tmp_node.backend_port)
         srv.sendto(msg.encode(), ADDR)
-        tmp_node.set_timestamp(timestamp)
+        # tmp_node.set_timestamp(timestamp)
+    lock.release()
     
 
 
@@ -271,9 +273,9 @@ if __name__ == "__main__":
     except socket.error as e:
         sys.exit(-1)
 
-    current_thread = threading.Thread(target = client_handle, args = (s, ))
-    current_thread.daemon = True
-    current_thread.start()
+    handle_thread = threading.Thread(target = client_handle, args = (s, ))
+    handle_thread.daemon = True
+    handle_thread.start()
 
     send_keepalive(s)
 
