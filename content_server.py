@@ -58,12 +58,22 @@ def validate_input():
         server_address = sys.argv[1]
         server_port = int(sys.argv[2])
 
-def client_handle(srv, msg, client_addr):
-    print("Message: ", msg.decode('utf-8'))
-    print("Client addr: ", client_addr)
-    ADDR = (client_addr, port)
-    reply_message = "Server Received: ACK"
-    srv.sendto(reply_message.encode(), client_addr)
+def client_handle(srv):
+    print(srv)
+    while True:
+        print("A")
+
+        msg_addr = s.recvfrom(BUFSIZE)
+        print("A2")
+
+        msg = msg_addr[0]
+        client_addr = msg_addr[1]
+        print(msg_addr.decode())
+
+
+        ADDR = (client_addr, port)
+        reply_message = "Server Received: ACK"
+        srv.sendto(reply_message.encode(), client_addr)
 
     # is_connected = True
     # while is_connected:
@@ -92,6 +102,7 @@ def add_neighbors(cmd_line):
     # print(uuid, host_name, backend_port, metric)
     uuid_distance_map[uuid] = metric
     uuid_node_map[uuid] = Node(uuid = uuid, host_name = host_name, backend_port = backend_port, metric = metric)
+    print(uuid_distance_map, uuid_node_map)
 
 def print_active_neighbors():
     result = dict()
@@ -111,25 +122,31 @@ def print_active_neighbors():
     result["neighbors"] = tmp_outer_dict
     print(result)
 
+def keepalive_handle():
+    pass
 
 def send_keepalive():
-    pass
+    for uuid in uuid_node_map:
+        tmp_node = uuid_node_map[uuid]
+    
+
 
 # Used together with send_keepalive to remove inactive nodes
 def update_neighbors():
     pass
 
-# Initialize uuid_distance map according to the conf file
-def init_uuid_distance_map(peer_count, peer_nodes):
+# Initialize uuid_distance map uuid_node map according to the .conf's neighbor nodes
+def init_map(peer_count, peer_nodes):
     for i in range(peer_count):
         line = peer_nodes[i]
         line = line.split(" = ")[1]
         line = line.split(",")
         uuid = line[0]
         host_name = line[1].strip()
-        port = int(line[2].strip())
+        backend_port = int(line[2].strip())
         distance = int(line[3].strip())
         uuid_distance_map[uuid] = distance
+        uuid_node_map[uuid] = Node(uuid, host_name, backend_port, distance)
 
 
 def advertisement():
@@ -160,8 +177,10 @@ if __name__ == "__main__":
     if len(parsed_result) > 3:
         peer_count = int(parsed_result[3])
         peer_nodes = parsed_result[4]
-        init_uuid_distance_map(peer_count, peer_nodes)
-    # Initialize neighbor nodes according to configure file
+
+        # Initialize neighbor nodes and distances according to configure file
+        init_map(peer_count, peer_nodes)
+
     # Create socket instance
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -172,6 +191,8 @@ if __name__ == "__main__":
         s.bind((localip, backend_port))
     except socket.error as e:
         sys.exit(-1)
+
+    current_thread = threading.Thread(target = client_handle, args = (s, ))
 
 
     # main loop
