@@ -21,9 +21,9 @@ uuid_distance_map = dict()
 # uuid: Node map, store all neighbor nodes
 uuid_node_map = dict()
 
-# uuid: heartbeat count map, store the latest heartbeat sequence number
+# uuid: linkstate count map, store the latest linkstate sequence number
 # Q: how to decide sequence number? many global variables needed?
-uuid_heartbeatcount_map = dict()
+uuid_linkstate_map = dict()
 
 
 
