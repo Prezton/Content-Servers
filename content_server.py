@@ -2,6 +2,7 @@ import threading
 import socket, sys
 import argparse
 from Node import Node
+from datetime import datetime
 # socket.gethostname --> host name
 # socket.gethostbyname --> host ip
 
@@ -14,7 +15,7 @@ from Node import Node
 DEFAULT_PORT = 18346
 port = DEFAULT_PORT
 BUFSIZE = 1024
-
+global self_uuid, self_name, self_backend_port, self_hostname
 # uuid: distance map
 uuid_distance_map = dict()
 
@@ -25,8 +26,12 @@ uuid_node_map = dict()
 # Q: how to decide sequence number? many global variables needed?
 uuid_linkstate_map = dict()
 
+# Synchronized lock used for maps
+lock = threading.Lock()
 
 
+# @brief .conf file parser used to start a node
+# @param path path of the .conf
 def parse_conf(path):
     conf_file = open(path, "r")
     lines = conf_file.readlines()
@@ -46,6 +51,8 @@ def parse_conf(path):
         peer_nodes = lines[4:]
     return (uuid, name, port, peer_count, peer_nodes)
 
+# @brief used for "uuid" command
+# @param current node's uuid
 def print_uuid(uuid):
     dict_uuid = {"uuid": uuid}
     print(dict_uuid)
@@ -58,26 +65,33 @@ def validate_input():
         server_address = sys.argv[1]
         server_port = int(sys.argv[2])
 
+
+# @brief thread to handle all incoming messages from peer nodes
+# @param socket of this node
 def client_handle(srv):
     while True:
-        msg_addr = s.recvfrom(BUFSIZE)
+        msg_addr = srv.recvfrom(BUFSIZE)
+        message_handle_thread = threading.Thread(target = message_handle, args = (msg_addr, srv))
+        message_handle_thread.start()
 
-        msg = msg_addr[0]
-        client_addr = msg_addr[1]
 
-        ADDR = (client_addr, port)
-        reply_message = "Server Received: ACK"
-        srv.sendto(reply_message.encode(), client_addr)
 
-    # is_connected = True
-    # while is_connected:
-    #     msg = conn.recv(BUFSIZE).decode('utf-8')
-    #     if msg == "DISCONNECT":
-    #         is_connected = False
-    #     reply_message = msg + "[FROM]" + str(addr)
-    #     conn.send(reply_message.encode())
-    # conn.close()
 
+def message_handle(msg_addr, srv):
+    msg = msg_addr[0]
+    client_addr = msg_addr[1]
+    msg = msg.decode()
+    if (msg.split("_")[0] == "Alive"):
+        keepalive_handle(msg)
+
+    # Handle keepalive signal
+    ADDR = (client_addr, port)
+    reply_message = "Server Received: ACK"
+    srv.sendto(reply_message.encode(), client_addr)
+
+
+# @brief used for "addneighbors ******" command
+# @param cmd_line command line string which contains parameters
 def add_neighbors(cmd_line):
     # print(cmd_line)
     args = cmd_line.split(" ")[1:]
@@ -93,11 +107,18 @@ def add_neighbors(cmd_line):
             backend_port = int(split_result[1].strip())
         elif split_result[0] == "metric":
             metric = int(split_result[1].strip())
-    # print(uuid, host_name, backend_port, metric)
+
     uuid_distance_map[uuid] = metric
-    uuid_node_map[uuid] = Node(uuid = uuid, host_name = host_name, backend_port = backend_port, metric = metric)
+    tmp_node = Node(uuid = uuid, host_name = host_name, backend_port = backend_port, metric = metric)
+
+    # Set timestamp for keepalive signal
+    tmp_node.set_timestamp(datetime.timestamp(datetime.now()))
+    uuid_node_map[uuid] = tmp_node
     # print(uuid_distance_map, uuid_node_map)
 
+
+# @brief Used for "neighbors" command
+# @brief iterate through uuid_node_map (neighbors) to print out related values
 def print_active_neighbors():
     result = dict()
     tmp_outer_dict = dict()
@@ -116,16 +137,55 @@ def print_active_neighbors():
     result["neighbors"] = tmp_outer_dict
     print(result)
 
-def keepalive_handle(srv):
-    pass
+# @brief Handle keepalive signal from received msg, if it is a new neighbor, add it to map
+# @param msg message sent from other content_server which may contain Alive_uuid_timestamps_hostname_backendport_metric
+def keepalive_handle(msg):
+    print(uuid_node_map)
+    msg = msg.split("_")
+    if msg[0] != "Alive":
+        return
+    uuid = msg[1]
+    node_timestamp = float(msg[2])
+    hostname = msg[3]
+    backend_port = msg[4]
+    metric = msg[5]
 
-# Send keepalive signal to neighbor nodes
+    # Update corresponding node's timestamp if it is in the 
+    if uuid in uuid_node_map:
+        tmp_node = uuid_node_map[uuid]
+        if tmp_node.timestamp <= node_timestamp:
+            tmp_node.set_timestamp(node_timestamp)
+    else:
+        print("keepalive_handle(): Node not in neighbors map---" + uuid + ", Need to add it")
+        new_node = Node(uuid, hostname, backend_port, metric)
+        new_node.set_timestamp(node_timestamp)
+        uuid_node_map[uuid] = new_node
+        uuid_distance_map[uuid] = metric    
+
+
+
+# @brief Send keepalive signal to neighbor nodes
+# @param srv server socket used to send messages
 def send_keepalive(srv):
-    msg = "Alive?"
+    # Iterate through the whole neighbors map to find out stale nodes
+    for uuid in uuid_node_map:
+        tmp_node = uuid_node_map[uuid]
+        if (cur_timestamp - tmp_node.timestamp > 15.0):
+            uuid_node_map.delete(uuid)
+            uuid_distance_map.delete(uuid)
+
+    msg = "Alive"
+    # Send to each neighbor node
     for uuid in uuid_node_map:
         tmp_node = uuid_node_map[uuid]
         tmp_addr = tmp_node.host_name
-        tmp_addr.sendto(msg.encode(), tmp_addr)
+
+        dt = datetime.now()
+        timestamp = datetime.timestamp(dt)
+        # protocol: Alive_uuid_timestamp_hostname_backendport_metric
+        msg += "_" + tmp_node.uuid + "_" + str(timestamp) + self_hostname + self_backendport + uuid_distance_map[uuid]
+        srv.sendto(msg.encode(), tmp_addr)
+        tmp_node.set_timestamp(timestamp)
     
 
 
@@ -144,7 +204,9 @@ def init_map(peer_count, peer_nodes):
         backend_port = int(line[2].strip())
         distance = int(line[3].strip())
         uuid_distance_map[uuid] = distance
-        uuid_node_map[uuid] = Node(uuid, host_name, backend_port, distance)
+        tmp_node = Node(uuid, host_name, backend_port, distance)
+        tmp_node.set_timestamp(datetime.timestamp(datetime.now()))
+        uuid_node_map[uuid] = tmp_node
 
 
 def advertisement():
@@ -169,9 +231,9 @@ if __name__ == "__main__":
     # if (sys.argv[1] == "-c"):
     #     conf_path = sys.argv[2]
     parsed_result = parse_conf(args.c)
-    uuid = parsed_result[0]
-    name = parsed_result[1]
-    backend_port = int(parsed_result[2])
+    self_uuid = parsed_result[0]
+    self_name = parsed_result[1]
+    self_backend_port = int(parsed_result[2])
     if len(parsed_result) > 3:
         peer_count = int(parsed_result[3])
         peer_nodes = parsed_result[4]
@@ -182,12 +244,13 @@ if __name__ == "__main__":
     # Create socket instance
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    
+    self_hostname = socket.gethostname()
+
     # localip = socket.gethostbyname(socket.gethostname())
     localip = "127.0.0.1"
     # bind socket
     try:
-        s.bind((localip, backend_port))
+        s.bind((localip, self_backend_port))
     except socket.error as e:
         sys.exit(-1)
 
@@ -215,12 +278,3 @@ if __name__ == "__main__":
             pass
 
 
-
-
-        # HANDLE UDP CLIENT, CREATE NEW THREAD FOR EACH MESSAGE
-        # msg_addr = s.recvfrom(BUFSIZE)
-        # msg = msg_addr[0]
-        # client_addr = msg_addr[1]
-        # current_thread = threading.Thread(target = client_handle, args = (s, msg, client_addr))
-        # current_thread.start()
-        # HANDLE UDP CLIENT
