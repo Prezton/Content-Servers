@@ -59,17 +59,11 @@ def validate_input():
         server_port = int(sys.argv[2])
 
 def client_handle(srv):
-    print(srv)
     while True:
-        print("A")
-
         msg_addr = s.recvfrom(BUFSIZE)
-        print("A2")
 
         msg = msg_addr[0]
         client_addr = msg_addr[1]
-        print(msg_addr.decode())
-
 
         ADDR = (client_addr, port)
         reply_message = "Server Received: ACK"
@@ -102,7 +96,7 @@ def add_neighbors(cmd_line):
     # print(uuid, host_name, backend_port, metric)
     uuid_distance_map[uuid] = metric
     uuid_node_map[uuid] = Node(uuid = uuid, host_name = host_name, backend_port = backend_port, metric = metric)
-    print(uuid_distance_map, uuid_node_map)
+    # print(uuid_distance_map, uuid_node_map)
 
 def print_active_neighbors():
     result = dict()
@@ -122,12 +116,16 @@ def print_active_neighbors():
     result["neighbors"] = tmp_outer_dict
     print(result)
 
-def keepalive_handle():
+def keepalive_handle(srv):
     pass
 
-def send_keepalive():
+# Send keepalive signal to neighbor nodes
+def send_keepalive(srv):
+    msg = "Alive?"
     for uuid in uuid_node_map:
         tmp_node = uuid_node_map[uuid]
+        tmp_addr = tmp_node.host_name
+        tmp_addr.sendto(msg.encode(), tmp_addr)
     
 
 
@@ -185,7 +183,8 @@ if __name__ == "__main__":
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     
-    localip = socket.gethostbyname(socket.gethostname())
+    # localip = socket.gethostbyname(socket.gethostname())
+    localip = "127.0.0.1"
     # bind socket
     try:
         s.bind((localip, backend_port))
@@ -193,14 +192,15 @@ if __name__ == "__main__":
         sys.exit(-1)
 
     current_thread = threading.Thread(target = client_handle, args = (s, ))
-
+    current_thread.start()
 
     # main loop
     while True:
         # msg_addr = s.recvfrom(BUFSIZE)
-        # client_msg = (msg_addr[0]).decode()
+        # command_line_msg = (msg_addr[0]).decode()
         # client_addr = msg_addr[1]
         command_line_msg = input()
+
         if command_line_msg == "uuid":
             print_uuid(uuid)
         elif command_line_msg == "neighbors":
