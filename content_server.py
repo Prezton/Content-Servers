@@ -90,9 +90,9 @@ def message_handle(msg_addr, srv):
         keepalive_handle(msg)
 
     # Handle keepalive signal
-    ADDR = (client_addr, port)
-    reply_message = "Server Received: ACK"
-    srv.sendto(reply_message.encode(), client_addr)
+    # ADDR = (client_addr, port)
+    # reply_message = "Server Received: ACK"
+    # srv.sendto(reply_message.encode(), client_addr)
 
 
 # @brief used for "addneighbors ******" command
