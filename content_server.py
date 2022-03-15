@@ -4,8 +4,8 @@ import argparse
 from Node import Node
 from Linkstate import Linkstate
 from datetime import datetime
-import pickle
 import json
+import copy
 
 # socket.gethostname --> host name
 # socket.gethostbyname --> host ip
@@ -34,6 +34,10 @@ uuid_linkstate_map = dict()
 # Synchronized lock used for maps
 lock = threading.Lock()
 
+def traverse_neighbors():
+    print(self_name + "'s Neighbors are: ")
+    for uuid in uuid_node_map:
+        print(uuid_node_map[uuid].name)
 
 # @brief .conf file parser used to start a node
 # @param path path of the .conf
@@ -261,12 +265,13 @@ def linkstate_handle(msg):
     tmp_uuid_metric_map = json_msg[3]
     tmp_seq_num = json_msg[4]
     # print(tmp_uuid, tmp_node_name, tmp_uuid_metric_map, tmp_seq_num)
-    if tmp_uuid not in uuid_linkstate_map:
+    if (tmp_uuid not in uuid_linkstate_map):
         tmp_linkstate = Linkstate(tmp_uuid, tmp_seq_num)
         tmp_linkstate.set_neighbor_metric_map(tmp_uuid_metric_map)
         tmp_linkstate.set_name(tmp_node_name)
         uuid_linkstate_map[tmp_uuid] = tmp_linkstate
-    if uuid_linkstate_map[tmp_uuid].seq_num > tmp_seq_num:
+    if uuid_linkstate_map[tmp_uuid].seq_num >= tmp_seq_num:
+        # print("DISCARDED")
         return
     else:
         tmp_linkstate = uuid_linkstate_map[tmp_uuid]
@@ -275,13 +280,13 @@ def linkstate_handle(msg):
         tmp_linkstate.set_name(tmp_node_name)
         tmp_linkstate.set_seq_num(tmp_seq_num)
     # print("size is: ", len(uuid_linkstate_map))
-    print(self_name + " received linkstate from " + tmp_node_name)
+    # print(self_name + " received #" + str(seq_num) + "linkstate from " + tmp_node_name)
     forward_linkstate(msg, tmp_uuid)
 
 
 
 # @brief Send linkstate signal to neighbor nodes
-# protocol: "LINKSTATE" + uuid + self_name + uuid-metric pairs + sequence # (timestamp)
+# protocol: "LINKSTATE" + uuid + self_name + uuid-[name , metric] pairs + sequence # (timestamp)
 def send_linkstate():
     linkstate_thread = threading.Timer(5, send_linkstate)
     linkstate_thread.daemon = True
@@ -293,8 +298,9 @@ def send_linkstate():
     linkstate_msg.append(self_uuid)
     linkstate_msg.append(self_name)
     lock.acquire()
-    for uuid in uuid_distance_map:
+    for uuid in uuid_node_map:
         tmp_neighbor_distance_map[uuid] = []
+        # uuid : [neighbor name, metric]
         tmp_neighbor_distance_map[uuid].append(uuid_node_map[uuid].name)
         tmp_neighbor_distance_map[uuid].append(uuid_distance_map[uuid])
     linkstate_msg.append(tmp_neighbor_distance_map)
@@ -306,7 +312,10 @@ def send_linkstate():
         tmp_node = uuid_node_map[uuid]
         tmp_addr = socket.gethostbyname(tmp_node.host_name)
         ADDR = (tmp_addr, tmp_node.backend_port)
-        print(self_name + " sent linkstate to " + tmp_node.name)
+        # if tmp_node.name:
+        #     print(self_name + " sent #SEQ NUM" + str(seq_num) + " linkstate to " + tmp_node.name)
+        # else:
+        #     print(self_name + " sent linkstate to " + uuid)
         s.sendto(linkstate_msg.encode(), ADDR)
     lock.release()
 
@@ -320,8 +329,10 @@ def forward_linkstate(linkstate_msg, excluded_node):
         tmp_node = uuid_node_map[uuid]
         tmp_addr = socket.gethostbyname(tmp_node.host_name)
         ADDR = (tmp_addr, tmp_node.backend_port)
-        print("IS NONE: ", tmp_node.name)
-        print(self_name + " forward linkstate to " + tmp_node.name)
+        # if tmp_node.name:
+        #     print(self_name + " forward linkstate to " + tmp_node.name)
+        # else:
+        #     print(self_name + " forward linkstate to " + uuid)
         s.sendto(linkstate_msg.encode(), ADDR)
     lock.release()
 
@@ -345,13 +356,17 @@ def print_map():
 
     for uuid in uuid_linkstate_map:
         tmp_linkstate = uuid_linkstate_map[uuid]
-        inner1 = {}
-        inner2 = {}
+        inner1 = dict()
+        inner1[copy.deepcopy(tmp_linkstate.name)] = dict()
+        inner2 = dict()
         for uuid2 in tmp_linkstate.neighbor_metric_map:
             inner2[tmp_linkstate.neighbor_metric_map[uuid2][0]] = tmp_linkstate.neighbor_metric_map[uuid2][1]
-        inner1[tmp_linkstate.name] = inner2
-    result["map"] = inner1
+        print(tmp_linkstate.name, tmp_linkstate.neighbor_metric_map)
+        inner1[copy.deepcopy(tmp_linkstate.name)] = copy.deepcopy(inner2)
+    result["map"] = copy.deepcopy(inner1)
     print(result)
+    # print(len(uuid_linkstate_map))
+    # print(uuid_linkstate_map)
 
 
 def kill_current_node():
