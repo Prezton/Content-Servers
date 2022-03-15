@@ -215,6 +215,7 @@ def send_keepalive(srv):
     for uuid in deleted:
         del uuid_node_map[uuid]
         del uuid_distance_map[uuid]
+        del uuid_linkstate_map[uuid]
         # print("deleted: " + uuid)
     # lock.release()
 
@@ -350,21 +351,23 @@ def print_map():
         tmp_neighbor_distance_map[uuid] = []
         tmp_neighbor_distance_map[uuid].append(uuid_node_map[uuid].name)
         tmp_neighbor_distance_map[uuid].append(uuid_distance_map[uuid])
-    lock.release()
     self_linkstate.set_neighbor_metric_map(tmp_neighbor_distance_map)
     uuid_linkstate_map[self_uuid] = self_linkstate
-
-    for uuid in uuid_linkstate_map:
-        tmp_linkstate = uuid_linkstate_map[uuid]
-        inner1 = dict()
-        inner1[copy.deepcopy(tmp_linkstate.name)] = dict()
+    result["map"] = dict()
+    inner1 = dict()
+    for tmp_linkstate in uuid_linkstate_map.values():
+        # tmp_linkstate = uuid_linkstate_map[uuid]
+        k1 = copy.deepcopy(tmp_linkstate.name)
+        inner1[k1] = dict()
         inner2 = dict()
-        for uuid2 in tmp_linkstate.neighbor_metric_map:
-            inner2[tmp_linkstate.neighbor_metric_map[uuid2][0]] = tmp_linkstate.neighbor_metric_map[uuid2][1]
-        print(tmp_linkstate.name, tmp_linkstate.neighbor_metric_map)
-        inner1[copy.deepcopy(tmp_linkstate.name)] = copy.deepcopy(inner2)
+        for node_metric in tmp_linkstate.neighbor_metric_map.values():
+            k2 = copy.deepcopy(node_metric[0])
+            inner2[k2] = int(copy.deepcopy(node_metric[1]))
+        # print(tmp_linkstate.name, tmp_linkstate.neighbor_metric_map)
+        inner1[k1] = copy.deepcopy(inner2)
     result["map"] = copy.deepcopy(inner1)
     print(result)
+    lock.release()
     # print(len(uuid_linkstate_map))
     # print(uuid_linkstate_map)
 
