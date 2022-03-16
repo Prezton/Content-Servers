@@ -14,4 +14,4 @@ while True:
     if (msg == "DISCONNECT"):
         print("BREAK")
         break
-    print("Server: ", client.recvfrom(BUFSIZE)[1])
+    # print("Server: ", client.recvfrom(BUFSIZE)[1])
