@@ -16,8 +16,6 @@ import copy
 #         parse_result = parse_conf(path)
 #         this.uuid = parse_result[0]
 
-DEFAULT_PORT = 18346
-port = DEFAULT_PORT
 BUFSIZE = 1024
 global self_uuid, self_name, self_backendport, self_hostname, s
 global seq_num
@@ -32,6 +30,9 @@ uuid_node_map = dict()
 uuid_linkstate_map = dict()
 
 # Synchronized lock used for maps
+node_map_lock = threading.Lock()
+distance_map_lock = threading.Lock()
+linkstate_map_lock = threading.Lock()
 lock = threading.Lock()
 
 def traverse_neighbors():
@@ -57,7 +58,7 @@ def parse_conf(path):
         elif split_result[0] == "backend_port":
             backend_port = int(split_result[1].strip())
         elif split_result[0] == "peer_count":
-            peer_count = split_result[1].strip()
+            peer_count = int(split_result[1].strip())
     if count_line >= 4:
         peer_nodes = lines[4:]
     if peer_count == None or peer_count < 1:
@@ -141,9 +142,11 @@ def add_neighbors(cmd_line):
 # @brief Used for "neighbors" command
 # @brief iterate through uuid_node_map (neighbors) to print out related values
 def print_active_neighbors():
+    print("INSIDE NEIGHBORS 1")
     result = dict()
     tmp_outer_dict = dict()
     lock.acquire()
+    print("INSIDE NEIGHBORS 2")
 
     for uuid in uuid_node_map:
         tmp_dict = dict()
@@ -200,6 +203,7 @@ def send_keepalive(srv):
     keepalive_thread = threading.Timer(3, send_keepalive, args = (s, ))
     keepalive_thread.daemon = True
     keepalive_thread.start()
+    print("KEEPALIVE SENDING...")
     # Iterate through the whole neighbors map to find out stale nodes
     cur_timestamp = datetime.timestamp(datetime.now())
     # print("send keepalive: " + str(cur_timestamp))
@@ -309,9 +313,10 @@ def update_linkstate_map(node_uuid, uuid_metric_map):
 # @brief Send linkstate signal to neighbor nodes
 # protocol: "LINKSTATE" + uuid + self_name + uuid-[name , metric] pairs + sequence # (timestamp)
 def send_linkstate():
-    linkstate_thread = threading.Timer(3, send_linkstate)
+    linkstate_thread = threading.Timer(5, send_linkstate)
     linkstate_thread.daemon = True
     linkstate_thread.start()
+    print("LINKSTATE SENDING...")
     global seq_num
     linkstate_msg = []
     tmp_neighbor_distance_map = {}
@@ -388,8 +393,7 @@ def print_map():
     result["map"] = copy.deepcopy(inner1)
     print(result)
     lock.release()
-    # print(len(uuid_linkstate_map))
-    # print(uuid_linkstate_map)
+
 
 
 def kill_current_node():
@@ -413,6 +417,7 @@ if __name__ == "__main__":
 
         # Initialize neighbor nodes and distances according to configure file
         init_map(peer_count, peer_nodes)
+        print("GET NEIGHBORS FROM CONF", peer_count, peer_nodes)
 
     # Create socket instance
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -420,8 +425,7 @@ if __name__ == "__main__":
     self_hostname = socket.gethostname()
 
     localip = socket.gethostbyname(socket.gethostname())
-    # localip = "127.0.0.1"
-    # bind socket
+
     try:
         s.bind((localip, self_backendport))
     except socket.error as e:
@@ -434,11 +438,10 @@ if __name__ == "__main__":
     send_keepalive(s)
     seq_num = 0
     send_linkstate()
+    # print("MAIN LOOP")
     # main loop
     while True:
-        # msg_addr = s.recvfrom(BUFSIZE)
-        # command_line_msg = (msg_addr[0]).decode()
-        # client_addr = msg_addr[1]
+
         command_line_msg = input()
 
         if command_line_msg == "uuid":
