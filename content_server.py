@@ -60,7 +60,7 @@ def parse_conf(path):
             peer_count = split_result[1].strip()
     if count_line >= 4:
         peer_nodes = lines[4:]
-    if peer_count == None:
+    if peer_count == None or peer_count < 1:
         return (uuid, name, backend_port)
     return (uuid, name, backend_port, peer_count, peer_nodes)
 
@@ -207,15 +207,18 @@ def send_keepalive(srv):
     lock.acquire()
     for uuid in uuid_node_map:
         tmp_node = uuid_node_map[uuid]
-        if (cur_timestamp - tmp_node.timestamp > 9):
+        if (cur_timestamp - tmp_node.timestamp > 10):
             # Avoid dict change during iteration
             deleted.add(uuid)
             
     # lock.acquire()
     for uuid in deleted:
-        del uuid_node_map[uuid]
-        del uuid_distance_map[uuid]
-        del uuid_linkstate_map[uuid]
+        if uuid in uuid_node_map:
+            del uuid_node_map[uuid]
+        if uuid in uuid_distance_map:
+            del uuid_distance_map[uuid]
+        if uuid in uuid_linkstate_map:
+            del uuid_linkstate_map[uuid]
         # print("deleted: " + uuid)
     # lock.release()
 
@@ -243,6 +246,7 @@ def update_neighbors():
 
 # Initialize uuid_distance map uuid_node map according to the .conf's neighbor nodes
 def init_map(peer_count, peer_nodes):
+    lock.acquire()
     for i in range(peer_count):
         line = peer_nodes[i]
         line = line.split(" = ")[1]
@@ -255,6 +259,7 @@ def init_map(peer_count, peer_nodes):
         tmp_node = Node(uuid, host_name, backend_port, distance)
         tmp_node.set_timestamp(datetime.timestamp(datetime.now()))
         uuid_node_map[uuid] = tmp_node
+    lock.release()
 
 # @brief handle linkstate msg from neighbor nodes
 # @param msg linkstate msg with the following protocol
@@ -264,32 +269,47 @@ def linkstate_handle(msg):
     tmp_uuid = json_msg[1]
     tmp_node_name = json_msg[2]
     tmp_uuid_metric_map = json_msg[3]
+    # if(tmp_node_name == "node6"):
+    #     print("RECEIVED LINKSTATE FROM NODE 6")
+    #     print(tmp_uuid_metric_map)
     tmp_seq_num = json_msg[4]
+    lock.acquire()
     # print(tmp_uuid, tmp_node_name, tmp_uuid_metric_map, tmp_seq_num)
     if (tmp_uuid not in uuid_linkstate_map):
         tmp_linkstate = Linkstate(tmp_uuid, tmp_seq_num)
         tmp_linkstate.set_neighbor_metric_map(tmp_uuid_metric_map)
         tmp_linkstate.set_name(tmp_node_name)
         uuid_linkstate_map[tmp_uuid] = tmp_linkstate
-    if uuid_linkstate_map[tmp_uuid].seq_num >= tmp_seq_num:
-        # print("DISCARDED")
-        return
     else:
-        tmp_linkstate = uuid_linkstate_map[tmp_uuid]
+        if uuid_linkstate_map[tmp_uuid].seq_num >= tmp_seq_num:
+            # print("DISCARDED")
+            return
+        else:
+            # update_linkstate_map(tmp_uuid, tmp_uuid_metric_map)
+            tmp_linkstate = uuid_linkstate_map[tmp_uuid]
 
-        tmp_linkstate.set_neighbor_metric_map(tmp_uuid_metric_map)
-        tmp_linkstate.set_name(tmp_node_name)
-        tmp_linkstate.set_seq_num(tmp_seq_num)
+            tmp_linkstate.set_neighbor_metric_map(tmp_uuid_metric_map)
+            tmp_linkstate.set_name(tmp_node_name)
+            tmp_linkstate.set_seq_num(tmp_seq_num)
+    lock.release()
     # print("size is: ", len(uuid_linkstate_map))
     # print(self_name + " received #" + str(seq_num) + "linkstate from " + tmp_node_name)
     forward_linkstate(msg, tmp_uuid)
 
+def update_linkstate_map(node_uuid, uuid_metric_map):
+    lock.acquire()
+    cur_linkstate= uuid_linkstate_map[node_uuid]
+    tmp_map = cur_linkstate.neighbor_metric_map
+    for uuid in tmp_map:
+        if uuid not in uuid_metric_map:
+            if uuid in uuid_linkstate_map:
+                del uuid_linkstate_map[uuid]
 
 
 # @brief Send linkstate signal to neighbor nodes
 # protocol: "LINKSTATE" + uuid + self_name + uuid-[name , metric] pairs + sequence # (timestamp)
 def send_linkstate():
-    linkstate_thread = threading.Timer(5, send_linkstate)
+    linkstate_thread = threading.Timer(3, send_linkstate)
     linkstate_thread.daemon = True
     linkstate_thread.start()
     global seq_num
@@ -347,7 +367,7 @@ def print_map():
     self_linkstate.set_name(self_name)
     tmp_neighbor_distance_map = dict()
     lock.acquire()
-    for uuid in uuid_distance_map:
+    for uuid in uuid_node_map:
         tmp_neighbor_distance_map[uuid] = []
         tmp_neighbor_distance_map[uuid].append(uuid_node_map[uuid].name)
         tmp_neighbor_distance_map[uuid].append(uuid_distance_map[uuid])
@@ -381,7 +401,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", required=True, type=str)
     args = parser.parse_args()
-    
     # if (sys.argv[1] == "-c"):
     #     conf_path = sys.argv[2]
     parsed_result = parse_conf(args.c)
