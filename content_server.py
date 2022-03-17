@@ -161,6 +161,8 @@ def print_active_neighbors():
         tmp_dict["metric"] = tmp_metric
         if (tmp_name != None):
             tmp_outer_dict[tmp_name] = tmp_dict
+        else:
+            tmp_outer_dict["NOTKNOWN YET:" + uuid] = tmp_dict
     result["neighbors"] = tmp_outer_dict
     lock.release()
 
@@ -255,7 +257,7 @@ def update_neighbors():
 
 # Initialize uuid_distance map uuid_node map according to the .conf's neighbor nodes
 def init_map(peer_count, peer_nodes):
-    # lock.acquire()
+    lock.acquire()
     for i in range(peer_count):
         line = peer_nodes[i]
         line = line.split(" = ")[1]
@@ -268,7 +270,28 @@ def init_map(peer_count, peer_nodes):
         tmp_node = Node(uuid, host_name, backend_port, distance)
         tmp_node.set_timestamp(datetime.timestamp(datetime.now()))
         uuid_node_map[uuid] = tmp_node
-    # lock.release()
+        node_name = get_neighbor_name(tmp_node)
+    lock.release()
+
+
+def get_neighbor_name(neighbor_node):
+    tmp_addr = socket.gethostbyname(neighbor_node.host_name)
+    ADDR = (tmp_addr, neighbor_node.backend_port)
+    message = "ASKNAME"
+    s.sendto(message.encode(), ADDR)
+    while True:
+        msg_addr = srv.recvfrom(BUFSIZE)
+        reply = msg_addr[0]
+        client_addr = msg_addr[1]
+        reply = reply.decode()
+        if(reply.split("_")[0] == "NAME"):
+            break
+    neighbor_name = reply.split("_")[1]
+    neighbor_node.set_name(neighbor_name)
+    
+
+
+
 # @brief handle linkstate msg from neighbor nodes
 # @param msg linkstate msg with the following protocol
 # protocol: "LINKSTATE" + uuid + self_name + uuid-metric pairs + sequence # (timestamp)
@@ -426,13 +449,6 @@ if __name__ == "__main__":
     self_uuid = parsed_result[0]
     self_name = parsed_result[1]
     self_backendport = int(parsed_result[2])
-    if len(parsed_result) > 3:
-        peer_count = int(parsed_result[3])
-        peer_nodes = parsed_result[4]
-
-        # Initialize neighbor nodes and distances according to configure file
-        init_map(peer_count, peer_nodes)
-        # print("GET NEIGHBORS FROM CONF", peer_count, peer_nodes)
 
     # Create socket instance
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -445,6 +461,16 @@ if __name__ == "__main__":
         s.bind((localip, self_backendport))
     except socket.error as e:
         sys.exit(-1)
+
+    if len(parsed_result) > 3:
+        peer_count = int(parsed_result[3])
+        peer_nodes = parsed_result[4]
+
+        # Initialize neighbor nodes and distances according to configure file
+        init_map(peer_count, peer_nodes)
+        # print("GET NEIGHBORS FROM CONF", peer_count, peer_nodes)
+
+
 
     handle_thread = threading.Thread(target = client_handle, args = (s, ))
     handle_thread.daemon = True
@@ -470,6 +496,5 @@ if __name__ == "__main__":
         elif command_line_msg == "map":
             print_map()
         elif command_line_msg == "rank":
-            print("NOT IMPLEMENTED YET")
-
+            print({'rank': {}})
 
