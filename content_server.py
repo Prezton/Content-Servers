@@ -84,6 +84,7 @@ def validate_input():
 # @param socket of this node
 def client_handle(srv):
     while True:
+        # print("LISTENING ON ", self_backendport)
         msg_addr = srv.recvfrom(BUFSIZE)
         message_handle_thread = threading.Thread(target = message_handle, args = (msg_addr, srv))
         message_handle_thread.daemon = True
@@ -98,6 +99,7 @@ def message_handle(msg_addr, srv):
     msg = msg.decode()
     # print(msg)
     if (msg.split("_")[0] == "Alive"):
+        # print("RECEIVED FROM LOCAL HOST")
         keepalive_handle(msg)
 
     elif (json.loads(msg)[0] == "LINKSTATE"):
@@ -146,7 +148,7 @@ def print_active_neighbors():
     result = dict()
     tmp_outer_dict = dict()
     lock.acquire()
-    # print("INSIDE NEIGHBORS 2")
+    # print("PRINT_ACTIVE_NEIGHBORS", file = sys.stderr)
 
     for uuid in uuid_node_map:
         tmp_dict = dict()
@@ -163,6 +165,8 @@ def print_active_neighbors():
             tmp_outer_dict[tmp_name] = tmp_dict
         else:
             tmp_outer_dict["NOTKNOWN YET:" + uuid] = tmp_dict
+            # print("tmp_name is None", tmp_dict,file = sys.stderr)
+
     result["neighbors"] = tmp_outer_dict
     lock.release()
 
@@ -204,7 +208,7 @@ def keepalive_handle(msg):
 # @brief Send keepalive signal to neighbor nodes
 # @param srv server socket used to send messages
 def send_keepalive(srv):
-    keepalive_thread = threading.Timer(3, send_keepalive, args = (s, ))
+    keepalive_thread = threading.Timer(2, send_keepalive, args = (s, ))
     keepalive_thread.daemon = True
     keepalive_thread.start()
     # print("KEEPALIVE SEND START")
@@ -216,7 +220,7 @@ def send_keepalive(srv):
     lock.acquire()
     for uuid in uuid_node_map:
         tmp_node = uuid_node_map[uuid]
-        if (cur_timestamp - tmp_node.timestamp > 10):
+        if (cur_timestamp - tmp_node.timestamp > 6):
             # Avoid dict change during iteration
             deleted.add(uuid)
             
@@ -236,7 +240,8 @@ def send_keepalive(srv):
     for uuid in uuid_node_map:
         tmp_node = uuid_node_map[uuid]
         tmp_addr = socket.gethostbyname(tmp_node.host_name)
-
+        # print("HOST_NAME: ", tmp_node.host_name)
+        # print("SENDING to: ", tmp_addr, "PORT: ", tmp_node.backend_port)
         dt = datetime.now()
         timestamp = datetime.timestamp(dt)
         # protocol: Alive_uuid_timestamp_hostname_backendport_metric_nodename
@@ -270,7 +275,7 @@ def init_map(peer_count, peer_nodes):
         tmp_node = Node(uuid, host_name, backend_port, distance)
         tmp_node.set_timestamp(datetime.timestamp(datetime.now()))
         uuid_node_map[uuid] = tmp_node
-        node_name = get_neighbor_name(tmp_node)
+
     lock.release()
 
 
@@ -278,17 +283,22 @@ def get_neighbor_name(neighbor_node):
     tmp_addr = socket.gethostbyname(neighbor_node.host_name)
     ADDR = (tmp_addr, neighbor_node.backend_port)
     message = "ASKNAME"
-    s.sendto(message.encode(), ADDR)
     while True:
-        msg_addr = srv.recvfrom(BUFSIZE)
+        s.sendto(message.encode(), ADDR)
+        print("name query sent")
+        msg_addr = s.recvfrom(BUFSIZE)
         reply = msg_addr[0]
         client_addr = msg_addr[1]
         reply = reply.decode()
         if(reply.split("_")[0] == "NAME"):
-            break
+            name_thread
     neighbor_name = reply.split("_")[1]
-    neighbor_node.set_name(neighbor_name)
+    return neighbor_name
     
+def handle_name(msg, neighbor_addr):
+    reply = "NAME" + "_" + self_name
+    s.sendto(reply.encode(), neighbor_addr)
+
 
 
 
@@ -455,7 +465,8 @@ if __name__ == "__main__":
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     self_hostname = socket.gethostname()
 
-    localip = socket.gethostbyname(socket.gethostname())
+    # localip = socket.gethostbyname(socket.gethostname())
+    localip = "127.0.0.1"
 
     try:
         s.bind((localip, self_backendport))
