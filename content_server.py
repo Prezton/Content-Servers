@@ -6,6 +6,7 @@ from Linkstate import Linkstate
 from datetime import datetime
 import json
 import copy
+import heapq
 
 # socket.gethostname --> host name
 # socket.gethostbyname --> host ip
@@ -208,7 +209,7 @@ def keepalive_handle(msg):
 # @brief Send keepalive signal to neighbor nodes
 # @param srv server socket used to send messages
 def send_keepalive(srv):
-    keepalive_thread = threading.Timer(2, send_keepalive, args = (s, ))
+    keepalive_thread = threading.Timer(3, send_keepalive, args = (s, ))
     keepalive_thread.daemon = True
     keepalive_thread.start()
     # print("KEEPALIVE SEND START")
@@ -220,7 +221,7 @@ def send_keepalive(srv):
     lock.acquire()
     for uuid in uuid_node_map:
         tmp_node = uuid_node_map[uuid]
-        if (cur_timestamp - tmp_node.timestamp > 6):
+        if (cur_timestamp - tmp_node.timestamp > 10):
             # Avoid dict change during iteration
             deleted.add(uuid)
             
@@ -442,6 +443,75 @@ def print_map():
     print(result)
     lock.release()
 
+def print_rank():
+    tmp_dict = find_shortest_path(self_name)
+    result = dict()
+    result["rank"] = tmp_dict
+    print(result)
+
+def find_shortest_path(src):
+        priority_queue = []
+        heapq.heapify(priority_queue)
+        step = 0
+        neighbors_graph = get_graph()
+        # neighbors_graph = {'node2': {'node3': 20, 'node1': 10}, 'node3': {'node4': 30, 'node1': 20, 'node2': 20},
+        #                    'node1': {'node2': 10, 'node3': 20}, 'node4': {'node3': 30}}
+        # denotes the distance from source node
+        distance = dict()
+        if not neighbors_graph:
+            return distance
+        # denote the nodes have/have not been visited
+        visited = set()
+        unvisited = set()
+        for node in neighbors_graph:
+            unvisited.add(node)
+            distance[node] = (float("inf"))
+        distance[src] = 0
+        heapq.heappush(priority_queue, (distance[src], src))
+
+        while priority_queue:
+            cur_node = heapq.heappop(priority_queue)
+            metric = cur_node[0]
+            cur_node_name = cur_node[1]
+            if metric > distance[cur_node_name]:
+                continue
+            neighbors = neighbors_graph[cur_node_name]
+            for neighbor_node_name in neighbors:
+                # print(neighbors[neighbor_node])
+                dist_to_next = neighbors[neighbor_node_name] + distance[cur_node_name]
+                if dist_to_next < distance[neighbor_node_name]:
+                    distance[neighbor_node_name] = dist_to_next
+                    heapq.heappush(priority_queue, (dist_to_next, neighbor_node_name))
+        if src in distance:
+            del distance[src]
+        return distance
+
+def get_graph():
+
+    lock.acquire()
+    self_linkstate = Linkstate(self_uuid, 0)
+    self_linkstate.set_name(self_name)
+    tmp_neighbor_distance_map = dict()
+    for uuid in uuid_node_map:
+        tmp_neighbor_distance_map[uuid] = []
+        tmp_neighbor_distance_map[uuid].append(uuid_node_map[uuid].name)
+        tmp_neighbor_distance_map[uuid].append(uuid_distance_map[uuid])
+    self_linkstate.set_neighbor_metric_map(tmp_neighbor_distance_map)
+    uuid_linkstate_map[self_uuid] = self_linkstate
+    inner1 = dict()
+    for tmp_linkstate in uuid_linkstate_map.values():
+        # tmp_linkstate = uuid_linkstate_map[uuid]
+        k1 = copy.deepcopy(tmp_linkstate.name)
+        inner1[k1] = dict()
+        inner2 = dict()
+        for node_metric in tmp_linkstate.neighbor_metric_map.values():
+            k2 = copy.deepcopy(node_metric[0])
+            inner2[k2] = int(copy.deepcopy(node_metric[1]))
+        # print(tmp_linkstate.name, tmp_linkstate.neighbor_metric_map)
+        inner1[k1] = copy.deepcopy(inner2)
+
+    lock.release()
+    return copy.deepcopy(inner1)
 
 
 def kill_current_node():
@@ -465,8 +535,8 @@ if __name__ == "__main__":
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     self_hostname = socket.gethostname()
 
-    # localip = socket.gethostbyname(socket.gethostname())
-    localip = "127.0.0.1"
+    localip = socket.gethostbyname(socket.gethostname())
+    # localip = "127.0.0.1"
 
     try:
         s.bind((localip, self_backendport))
@@ -507,5 +577,4 @@ if __name__ == "__main__":
         elif command_line_msg == "map":
             print_map()
         elif command_line_msg == "rank":
-            print({'rank': {}})
-
+            print_rank()
