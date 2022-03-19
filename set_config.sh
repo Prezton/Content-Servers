@@ -1,4 +1,9 @@
 addneighbor uuid=f94fc272-5611-4a61-8b27-de7fe233797f host=ece001.ece.local.cmu.edu backend_port=18338 metric=10
-addneighbor uuid=e5de4de8-a175-11ec-b909-0242ac120002 host=ece007.ece.local.cmu.edu backend_port=18330 metric=20
-addneighbor uuid=9eb0d873-640d-40a5-a237-8163d75bbd6f host=ece010.ece.local.cmu.edu backend_port=18334 metric=30
 addneighbor uuid=a9fbe8ee-d9ac-4b3e-8ddd-03c264538813 host=ece004.ece.local.cmu.edu backend_port=18326 metric=30
+addneighbor uuid=e5de4de8-a175-11ec-b909-0242ac120002 host=ece007.ece.local.cmu.edu backend_port=18330 metric=20
+addneighbor uuid=9eb0d873-640d-40a5-a237-8163d75bbd6f host=ece010.ece.local.cmu.edu backend_port=18334 metric=10
+addneighbor uuid=97e837c0-a535-11ec-b909-0242ac120002 host=ece013.ece.local.cmu.edu backend_port=18322 metric=30
+addneighbor uuid=a42444f2-a535-11ec-b909-0242ac120002 host=ece016.ece.local.cmu.edu backend_port=18318 metric=20
+addneighbor uuid=c90ce68e-a535-11ec-b909-0242ac120002 host=ece019.ece.local.cmu.edu backend_port=18314 metric=20
+addneighbor uuid=d95b0c46-a535-11ec-b909-0242ac120002 host=ece022.ece.local.cmu.edu backend_port=18310 metric=15
+addneighbor uuid=e0d07d1c-a535-11ec-b909-0242ac120002 host=ece025.ece.local.cmu.edu backend_port=18306 metric=35
