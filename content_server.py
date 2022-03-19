@@ -19,7 +19,6 @@ import heapq
 
 BUFSIZE = 1024
 global self_uuid, self_name, self_backendport, self_hostname, s
-global seq_num
 # uuid: distance map
 uuid_distance_map = dict()
 
@@ -359,7 +358,7 @@ def send_linkstate():
     linkstate_thread = threading.Timer(3, send_linkstate)
     linkstate_thread.daemon = True
     linkstate_thread.start()
-    global seq_num
+    # global seq_num
     linkstate_msg = []
     tmp_neighbor_distance_map = {}
     linkstate_msg.append("LINKSTATE")
@@ -373,7 +372,7 @@ def send_linkstate():
         tmp_neighbor_distance_map[uuid].append(uuid_node_map[uuid].name)
         tmp_neighbor_distance_map[uuid].append(uuid_distance_map[uuid])
     linkstate_msg.append(tmp_neighbor_distance_map)
-    seq_num += 1
+    seq_num = datetime.timestamp(datetime.now())
     linkstate_msg.append(seq_num)
     linkstate_msg = json.dumps(linkstate_msg)
 
@@ -449,6 +448,9 @@ def print_rank():
     result["rank"] = tmp_dict
     print(result)
 
+# @brief Find shortest path from src node
+# @param source node
+# @return dict of shortest distances
 def find_shortest_path(src):
         priority_queue = []
         heapq.heapify(priority_queue)
@@ -486,6 +488,8 @@ def find_shortest_path(src):
             del distance[src]
         return distance
 
+# @brief Get the current network neighbor_graph
+# @return Network topology
 def get_graph():
 
     lock.acquire()
@@ -513,6 +517,28 @@ def get_graph():
     lock.release()
     return copy.deepcopy(inner1)
 
+# @brief Periodically check if a non-neighbor node is alive
+# @brief Delete the dead node from the linkstate map (3rd cases)
+def check_state():
+    checkstate_thread = threading.Timer(3, check_state)
+    checkstate_thread.daemon = True
+    checkstate_thread.start()
+    # print("CHECKING...")
+    deleted = set()
+    lock.acquire()
+    current_timestamp = datetime.timestamp(datetime.now())
+    for uuid in uuid_linkstate_map:
+        if uuid == self_uuid:
+            continue
+        # print("CHECKING: ", uuid_linkstate_map[uuid].name)
+        if current_timestamp - uuid_linkstate_map[uuid].seq_num > 15:
+            deleted.add(uuid)
+        # if(uuid_linkstate_map[uuid].name == "node4"):
+            # print("PREV TIMESTAMP IS: ", uuid_linkstate_map[uuid].seq_num, "CURRENT TIMESTAMP IS: ", current_timestamp)
+    for uuid in deleted:
+        # print("DELETED: ", uuid_linkstate_map[uuid].name)
+        del uuid_linkstate_map[uuid]
+    lock.release()
 
 def kill_current_node():
     sys.exit(0)
@@ -535,8 +561,8 @@ if __name__ == "__main__":
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     self_hostname = socket.gethostname()
 
-    localip = socket.gethostbyname(socket.gethostname())
-    # localip = "127.0.0.1"
+    # localip = socket.gethostbyname(socket.gethostname())
+    localip = "127.0.0.1"
 
     try:
         s.bind((localip, self_backendport))
@@ -557,11 +583,12 @@ if __name__ == "__main__":
     handle_thread.daemon = True
     handle_thread.start()
 
+
     send_keepalive(s)
-    seq_num = 0
     send_linkstate()
-    # print("MAIN LOOP")
-    # main loop
+    check_state()
+
+
     while True:
 
         command_line_msg = input()
